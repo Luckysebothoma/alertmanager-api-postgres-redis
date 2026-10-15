@@ -43,13 +43,27 @@ write_file() {
 }
 
 gen_secret() {
-  local file="$1"
-  if [[ -f "$file" ]]; then
-    log "secret exists, keeping: $file"
-    return 0
-  fi
-  ( umask 077; openssl rand -base64 32 | tr -d '\n' > "$file" )
-  log "generated secret: $file"
+    local secret_path="$1"
+    local static_value="$2"
+
+    # Remove the file if it already exists
+    if [ -f "$secret_path" ]; then
+        rm -f "$secret_path"
+    fi
+
+    # Ensure the parent directory exists
+    mkdir -p "$(dirname "$secret_path")"
+
+    if [ -n "$static_value" ]; then
+        # Use the provided static data
+        echo -n "$static_value" > "$secret_path"
+    else
+        # Fallback to generating a random secret if no static value is given
+        openssl rand -base64 32 | tr -d '\n' > "$secret_path"
+    fi
+
+    # Secure the file permissions
+    chmod 600 "$secret_path"
 }
 
 ensure_network() {
@@ -529,10 +543,10 @@ services:
       - "${API_PORT}:4400"
     environment:
       PORT: "4400"
-      PG_HOST: postgres
-      PG_PORT: "5432"
-      PG_USER: app_user
-      PG_DATABASE: forecast
+      PG_HOST: 192.168.0.140
+      PG_PORT: "8067"
+      PG_USER: alertm
+      PG_DATABASE: alertmanager
       PG_PASSWORD_FILE: /run/secrets/app_db_password
       REDIS_HOST: redis
       REDIS_PORT: "6379"
@@ -550,30 +564,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-  postgres:
-    image: postgres:16-alpine
-    networks:
-      - obs-network
-    environment:
-      POSTGRES_DB: forecast
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD_FILE: /run/secrets/pg_root_password
-      APP_DB_PASSWORD_FILE: /run/secrets/app_db_password
-      MONITORING_DB_PASSWORD_FILE: /run/secrets/monitoring_db_password
-      BACKUP_DB_PASSWORD_FILE: /run/secrets/backup_db_password
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-      - ${POSTGRES_INIT_DIR}:/docker-entrypoint-initdb.d:ro
-    secrets:
-      - pg_root_password
-      - app_db_password
-      - monitoring_db_password
-      - backup_db_password
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
 
   redis:
     image: redis:7-alpine
