@@ -1,0 +1,82 @@
+version: "3.8"
+
+services:
+  api:
+    image: ${IMAGE_NAME}:${IMAGE_TAG}
+    networks:
+      - obs-network
+      - databases
+    ports:
+      - "${API_PORT}:4400"
+    environment:
+      PORT: "4400"
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_USER: app_user
+      PG_DATABASE: forecast
+      PG_PASSWORD_FILE: /run/secrets/app_db_password
+      REDIS_HOST: redis-public
+      REDIS_PORT: "6379"
+      TZ: Africa/Johannesburg
+    secrets:
+      - app_db_password
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "node", "-e", "require(\"http\").get(\"http://localhost:4400/health\",r=>process.exit(r.statusCode===200?0:1)).on(\"error\",()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    networks:
+      - obs-network
+      - databases
+    environment:
+      POSTGRES_DB: forecast
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_root_password
+      APP_DB_PASSWORD_FILE: /run/secrets/app_db_password
+      MONITORING_DB_PASSWORD_FILE: /run/secrets/monitoring_db_password
+      BACKUP_DB_PASSWORD_FILE: /run/secrets/backup_db_password
+      TZ: Africa/Johannesburg
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ${POSTGRES_INIT_DIR}:/docker-entrypoint-initdb.d:ro
+    secrets:
+      - pg_root_password
+      - app_db_password
+      - monitoring_db_password
+      - backup_db_password
+    ports:
+      - "8068:5432"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+networks:
+  obs-network:
+    external: true
+  databases:
+    external: true
+
+volumes:
+  pg_data:
+  redis_data:
+
+secrets:
+  pg_root_password:
+    file: ./secrets/pg_root_password.txt
+  app_db_password:
+    file: ./secrets/app_db_password.txt
+  monitoring_db_password:
+    file: ./secrets/monitoring_db_password.txt
+  backup_db_password:
+    file: ./secrets/backup_db_password.txt
