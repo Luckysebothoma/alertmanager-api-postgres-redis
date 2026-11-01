@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   api:
-    image: 192.168.0.140:5000/alertmanager-forecast-api:latest
+    image: 192.168.0.140:5000/alertmanager-forecast-api:latest-prd
     ports:
       - "${API_PORT}:4400"
     environment:
@@ -12,10 +12,13 @@ services:
       PG_USER: alertm
       PG_DATABASE: alertmanager
       PG_PASSWORD_FILE: /run/secrets/app_db_password
+      PG_PASSWORD: ${PG_PASS}
       REDIS_HOST: "192.168.0.140"
       REDIS_PORT: "6390"
     secrets:
       - app_db_password
+    env_file:
+       - .env
     networks:
       - obs-network
       - databases

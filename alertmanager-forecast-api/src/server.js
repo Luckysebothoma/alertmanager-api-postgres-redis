@@ -20,15 +20,13 @@ app.use("*", async (c, next) => {
 
 app.get("/health", async (c) => {
   console.log("[health] Checking PostgreSQL and Redis connectivity...");
-  try {
-    await pool.query("SELECT 1");
-    await redis.ping();
-    console.log("[health] Status: OK");
-    return c.json({ status: "ok" });
-  } catch (err) {
-    console.error("[health] Status: DEGRADED ->", err.message);
-    return c.json({ status: "degraded", error: err.message }, 503);
-  }
+  const checks = { postgres: "ok", redis: "ok" };
+  try { await pool.query("SELECT 1"); }
+  catch (e) { checks.postgres = e.message; console.error("[health] postgres:", e.message); }
+  try { await redis.ping(); }
+  catch (e) { checks.redis = e.message; console.error("[health] redis:", e.message); }
+  const ok = checks.postgres === "ok" && checks.redis === "ok";
+  return c.json({ status: ok ? "ok" : "degraded", ...checks }, ok ? 200 : 503);
 });
 
 app.get("/metrics", async (c) => {
